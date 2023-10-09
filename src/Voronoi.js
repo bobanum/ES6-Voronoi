@@ -1,11 +1,12 @@
 import Vertex from './Vertex.js';
 import Edge from './Edge.js';
 import HalfEdge from './HalfEdge.js';
-import RBTree from './RBTree.js';
+import BeachLine from './BeachLine.js';
 import Cell from './Cell.js';
 import CircleEvent from './CircleEvent.js';
 import Diagram from './Diagram.js';
 import BeachSection from './BeachSection.js';
+import RBTree from './RBTree.js';
 
 export default class Voronoi {
 	constructor() {
@@ -15,21 +16,21 @@ export default class Voronoi {
 		this.toRecycle = null;
 		this.beachSectionJunkyard = [];
 		this.circleEventJunkyard = [];
+		this.firstCircleEvent = null;
 		this.vertexJunkyard = [];
 		this.edgeJunkyard = [];
 		this.cellJunkyard = [];
-
 	}
 	reset() {
 		if (!this.beachline) {
-			this.beachline = new RBTree();
+			this.beachline = new BeachLine();
 		}
 		// Move leftover beachSections to the beachSection junkyard.
 		if (this.beachline.root) {
-			var beachSection = this.beachline.getFirst(this.beachline.root);
+			var beachSection = this.beachline.root.getFirst();
 			while (beachSection) {
 				this.beachSectionJunkyard.push(beachSection); // mark for reuse
-				beachSection = beachSection.rbNext;
+				beachSection = beachSection.next;
 			}
 		}
 		this.beachline.root = null;
@@ -195,7 +196,7 @@ export default class Voronoi {
 		if (!pby2) {
 			return rfocx;
 		}
-		var lArc = arc.rbPrevious;
+		var lArc = arc.previous;
 		if (!lArc) {
 			return -Infinity;
 		}
@@ -220,7 +221,7 @@ export default class Voronoi {
 	// calculate the right break point of a particular beach section,
 	// given a particular directrix
 	rightBreakPoint(arc, directrix) {
-		var rArc = arc.rbNext;
+		var rArc = arc.next;
 		if (rArc) {
 			return this.leftBreakPoint(rArc, directrix);
 		}
@@ -230,7 +231,7 @@ export default class Voronoi {
 	
 	detachBeachSection(beachSection) {
 		this.detachCircleEvent(beachSection); // detach potentially attached circle event
-		this.beachline.rbRemoveNode(beachSection); // remove from RB-tree
+		this.beachline.removeNode(beachSection); // remove from RB-tree
 		this.beachSectionJunkyard.push(beachSection); // mark for reuse
 	}
 	
@@ -239,8 +240,8 @@ export default class Voronoi {
 			x = circle.x,
 			y = circle.ycenter,
 			vertex = this.createVertex(x, y),
-			previous = beachSection.rbPrevious,
-			next = beachSection.rbNext,
+			previous = beachSection.previous,
+			next = beachSection.next,
 			disappearingTransitions = [beachSection],
 			abs_fn = Math.abs;
 	
@@ -259,7 +260,7 @@ export default class Voronoi {
 		// look left
 		var lArc = previous;
 		while (lArc.circleEvent && abs_fn(x - lArc.circleEvent.x) < 1e-9 && abs_fn(y - lArc.circleEvent.ycenter) < 1e-9) {
-			previous = lArc.rbPrevious;
+			previous = lArc.previous;
 			disappearingTransitions.unshift(lArc);
 			this.detachBeachSection(lArc); // mark for reuse
 			lArc = previous;
@@ -274,7 +275,7 @@ export default class Voronoi {
 		// look right
 		var rArc = next;
 		while (rArc.circleEvent && abs_fn(x - rArc.circleEvent.x) < 1e-9 && abs_fn(y - rArc.circleEvent.ycenter) < 1e-9) {
-			next = rArc.rbNext;
+			next = rArc.next;
 			disappearingTransitions.push(rArc);
 			this.detachBeachSection(rArc); // mark for reuse
 			rArc = next;
@@ -327,32 +328,32 @@ export default class Voronoi {
 			// x lessThanWithEpsilon xl => falls somewhere before the left edge of the beachSection
 			if (dxl > 1e-9) {
 				// this case should never happen
-				// if (!node.rbLeft) {
-				//    rArc = node.rbLeft;
+				// if (!node.left) {
+				//    rArc = node.left;
 				//    break;
 				//    }
-				node = node.rbLeft;
+				node = node.left;
 			}
 			else {
 				dxr = x - this.rightBreakPoint(node, directrix);
 				// x greaterThanWithEpsilon xr => falls somewhere after the right edge of the beachSection
 				if (dxr > 1e-9) {
-					if (!node.rbRight) {
+					if (!node.right) {
 						lArc = node;
 						break;
 					}
-					node = node.rbRight;
+					node = node.right;
 				}
 				else {
 					// x equalWithEpsilon xl => falls exactly on the left edge of the beachSection
 					if (dxl > -1e-9) {
-						lArc = node.rbPrevious;
+						lArc = node.previous;
 						rArc = node;
 					}
 					// x equalWithEpsilon xr => falls exactly on the right edge of the beachSection
 					else if (dxr > -1e-9) {
 						lArc = node;
-						rArc = node.rbNext;
+						rArc = node.next;
 					}
 					// falls exactly somewhere in the middle of the beachSection
 					else {
@@ -367,7 +368,7 @@ export default class Voronoi {
 	
 		// create a new beach section object for the site and add it to RB-tree
 		var newArc = this.createBeachSection(site);
-		this.beachline.rbInsertSuccessor(lArc, newArc);
+		this.beachline.insertSuccessor(lArc, newArc);
 	
 		// cases:
 		//
@@ -396,7 +397,7 @@ export default class Voronoi {
 	
 			// split the beach section into two separate beach sections
 			rArc = this.createBeachSection(lArc.site);
-			this.beachline.rbInsertSuccessor(newArc, rArc);
+			this.beachline.insertSuccessor(newArc, rArc);
 	
 			// since we have a new transition between two beach sections,
 			// a new edge is born
@@ -484,8 +485,8 @@ export default class Voronoi {
 	}
 	
 	attachCircleEvent(arc) {
-		var lArc = arc.rbPrevious,
-			rArc = arc.rbNext;
+		var lArc = arc.previous,
+			rArc = arc.next;
 		if (!lArc || !rArc) { return; } // does that ever happen?
 		var lSite = lArc.site,
 			cSite = arc.site,
@@ -548,17 +549,17 @@ export default class Voronoi {
 			node = this.circleEvents.root;
 		while (node) {
 			if (circleEvent.y < node.y || (circleEvent.y === node.y && circleEvent.x <= node.x)) {
-				if (node.rbLeft) {
-					node = node.rbLeft;
+				if (node.left) {
+					node = node.left;
 				}
 				else {
-					predecessor = node.rbPrevious;
+					predecessor = node.previous;
 					break;
 				}
 			}
 			else {
-				if (node.rbRight) {
-					node = node.rbRight;
+				if (node.right) {
+					node = node.right;
 				}
 				else {
 					predecessor = node;
@@ -566,7 +567,7 @@ export default class Voronoi {
 				}
 			}
 		}
-		this.circleEvents.rbInsertSuccessor(predecessor, circleEvent);
+		this.circleEvents.insertSuccessor(predecessor, circleEvent);
 		if (!predecessor) {
 			this.firstCircleEvent = circleEvent;
 		}
@@ -575,10 +576,10 @@ export default class Voronoi {
 	detachCircleEvent(arc) {
 		var circleEvent = arc.circleEvent;
 		if (circleEvent) {
-			if (!circleEvent.rbPrevious) {
-				this.firstCircleEvent = circleEvent.rbNext;
+			if (!circleEvent.previous) {
+				this.firstCircleEvent = circleEvent.next;
 			}
-			this.circleEvents.rbRemoveNode(circleEvent); // remove from RB-tree
+			this.circleEvents.removeNode(circleEvent); // remove from RB-tree
 			this.circleEventJunkyard.push(circleEvent);
 			arc.circleEvent = null;
 		}
@@ -995,7 +996,7 @@ export default class Voronoi {
 			var bs = this.beachline.getFirst(this.beachline.root);
 			while ( bs ) {
 				console.log('  site %d: xl: %f, xr: %f', bs.site.voronoiId, this.leftBreakPoint(bs, y), this.rightBreakPoint(bs, y));
-				bs = bs.rbNext;
+				bs = bs.next;
 				}
 			}
 		};

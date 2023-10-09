@@ -6,166 +6,146 @@ export default class RBTree {
 		this.root = null;
 	};
 
-	rbInsertSuccessor(node, successor) {
+	/**
+	 * 
+	 * @param {RBNode} node 
+	 * @param {RBNode} successor 
+	 */
+	insertSuccessor(node, successor) {
 		var parent;
 		if (node) {
-			// >>> rhill 2011-05-27: Performance: cache previous/next nodes
-			successor.rbPrevious = node;
-			successor.rbNext = node.rbNext;
-			if (node.rbNext) {
-				node.rbNext.rbPrevious = successor;
+			successor.previous = node;
+			successor.next = node.next;
+			if (node.next) {
+				node.next.previous = successor;
 			}
-			node.rbNext = successor;
-			// <<<
-			if (node.rbRight) {
-				// in-place expansion of node.rbRight.getFirst();
-				node = node.rbRight;
-				while (node.rbLeft) { node = node.rbLeft; }
-				node.rbLeft = successor;
-			}
-			else {
-				node.rbRight = successor;
+			node.next = successor;
+			if (node.right) {
+				node = node.right.getFirst();
+				node.left = successor;
+			} else {
+				node.right = successor;
 			}
 			parent = node;
-		}
-		// rhill 2011-06-07: if node is null, successor must be inserted
-		// to the left-most part of the tree
-		else if (this.root) {
-			node = this.getFirst(this.root);
-			// >>> Performance: cache previous/next nodes
-			successor.rbPrevious = null;
-			successor.rbNext = node;
-			node.rbPrevious = successor;
-			// <<<
-			node.rbLeft = successor;
+		} else if (this.root) {
+			node = this.root.getFirst();
+			successor.previous = null;
+			successor.next = node;
+			node.previous = successor;
+			node.left = successor;
 			parent = node;
-		}
-		else {
-			// >>> Performance: cache previous/next nodes
-			successor.rbPrevious = successor.rbNext = null;
-			// <<<
+		} else {
+			successor.previous = successor.next = null;
 			this.root = successor;
 			parent = null;
 		}
-		successor.rbLeft = successor.rbRight = null;
-		successor.rbParent = parent;
-		successor.rbRed = true;
-		// Fixup the modified tree by recoloring nodes and performing
-		// rotations (2 at most) hence the red-black tree properties are
-		// preserved.
+		successor.left = successor.right = null;
+		successor.parent = parent;
+		successor.red = true;
+
 		var grandpa, uncle;
 		node = successor;
-		while (parent && parent.rbRed) {
-			grandpa = parent.rbParent;
-			if (parent === grandpa.rbLeft) {
-				uncle = grandpa.rbRight;
-				if (uncle && uncle.rbRed) {
-					parent.rbRed = uncle.rbRed = false;
-					grandpa.rbRed = true;
+		while (parent && parent.red) {
+			grandpa = parent.parent;
+			if (parent === grandpa.left) {
+				uncle = grandpa.right;
+				if (uncle && uncle.red) {
+					parent.red = uncle.red = false;
+					grandpa.red = true;
 					node = grandpa;
-				}
-				else {
-					if (node === parent.rbRight) {
-						this.rbRotateLeft(parent);
+				} else {
+					if (node === parent.right) {
+						this.rotateLeft(parent);
 						node = parent;
-						parent = node.rbParent;
+						parent = node.parent;
 					}
-					parent.rbRed = false;
-					grandpa.rbRed = true;
-					this.rbRotateRight(grandpa);
+					parent.red = false;
+					grandpa.red = true;
+					this.rotateRight(grandpa);
+				}
+			} else {
+				uncle = grandpa.left;
+				if (uncle && uncle.red) {
+					parent.red = uncle.red = false;
+					grandpa.red = true;
+					node = grandpa;
+				} else {
+					if (node === parent.left) {
+						this.rotateRight(parent);
+						node = parent;
+						parent = node.parent;
+					}
+					parent.red = false;
+					grandpa.red = true;
+					this.rotateLeft(grandpa);
 				}
 			}
-			else {
-				uncle = grandpa.rbLeft;
-				if (uncle && uncle.rbRed) {
-					parent.rbRed = uncle.rbRed = false;
-					grandpa.rbRed = true;
-					node = grandpa;
-				}
-				else {
-					if (node === parent.rbLeft) {
-						this.rbRotateRight(parent);
-						node = parent;
-						parent = node.rbParent;
-					}
-					parent.rbRed = false;
-					grandpa.rbRed = true;
-					this.rbRotateLeft(grandpa);
-				}
-			}
-			parent = node.rbParent;
+			parent = node.parent;
 		}
-		this.root.rbRed = false;
-	};
+		this.root.red = false;
+	}
 
-	rbRemoveNode(node) {
-		// >>> rhill 2011-05-27: Performance: cache previous/next nodes
-		if (node.rbNext) {
-			node.rbNext.rbPrevious = node.rbPrevious;
+	removeNode(node) {
+		// return node.remove();
+		if (node.next) {
+			node.next.previous = node.previous;
 		}
-		if (node.rbPrevious) {
-			node.rbPrevious.rbNext = node.rbNext;
+		if (node.previous) {
+			node.previous.next = node.next;
 		}
-		node.rbNext = node.rbPrevious = null;
-		// <<<
-		var parent = node.rbParent,
-			left = node.rbLeft,
-			right = node.rbRight,
+		node.next = node.previous = null;
+		var parent = node.parent,
+			left = node.left,
+			right = node.right,
 			next;
 		if (!left) {
 			next = right;
-		}
-		else if (!right) {
+		} else if (!right) {
 			next = left;
-		}
-		else {
-			next = this.getFirst(right);
+		} else {
+			next = right.getFirst();
 		}
 		if (parent) {
-			if (parent.rbLeft === node) {
-				parent.rbLeft = next;
+			if (parent.left === node) {
+				parent.left = next;
+			} else {
+				parent.right = next;
 			}
-			else {
-				parent.rbRight = next;
-			}
-		}
-		else {
+		} else {
 			this.root = next;
 		}
 		// enforce red-black rules
 		var isRed;
 		if (left && right) {
-			isRed = next.rbRed;
-			next.rbRed = node.rbRed;
-			next.rbLeft = left;
-			left.rbParent = next;
+			isRed = next.red;
+			next.red = node.red;
+			next.left = left;
+			left.parent = next;
 			if (next !== right) {
-				parent = next.rbParent;
-				next.rbParent = node.rbParent;
-				node = next.rbRight;
-				parent.rbLeft = node;
-				next.rbRight = right;
-				right.rbParent = next;
-			}
-			else {
-				next.rbParent = parent;
+				parent = next.parent;
+				next.parent = node.parent;
+				node = next.right;
+				parent.left = node;
+				next.right = right;
+				right.parent = next;
+			} else {
+				next.parent = parent;
 				parent = next;
-				node = next.rbRight;
+				node = next.right;
 			}
-		}
-		else {
-			isRed = node.rbRed;
+		} else {
+			isRed = node.red;
 			node = next;
 		}
 		// 'node' is now the sole successor's child and 'parent' its
 		// new parent (since the successor can have been moved)
 		if (node) {
-			node.rbParent = parent;
+			node.parent = parent;
 		}
 		// the 'easy' cases
 		if (isRed) { return; }
-		if (node && node.rbRed) {
-			node.rbRed = false;
+		if (node && node.red) {
+			node.red = false;
 			return;
 		}
 		// the other cases
@@ -174,116 +154,70 @@ export default class RBTree {
 			if (node === this.root) {
 				break;
 			}
-			if (node === parent.rbLeft) {
-				sibling = parent.rbRight;
-				if (sibling.rbRed) {
-					sibling.rbRed = false;
-					parent.rbRed = true;
-					this.rbRotateLeft(parent);
-					sibling = parent.rbRight;
+			if (node === parent.left) {
+				sibling = parent.right;
+				if (sibling.red) {
+					sibling.red = false;
+					parent.red = true;
+					this.rotateLeft(parent);
+					sibling = parent.right;
 				}
-				if ((sibling.rbLeft && sibling.rbLeft.rbRed) || (sibling.rbRight && sibling.rbRight.rbRed)) {
-					if (!sibling.rbRight || !sibling.rbRight.rbRed) {
-						sibling.rbLeft.rbRed = false;
-						sibling.rbRed = true;
-						this.rbRotateRight(sibling);
-						sibling = parent.rbRight;
+				if ((sibling.left && sibling.left.red) || (sibling.right && sibling.right.red)) {
+					if (!sibling.right || !sibling.right.red) {
+						sibling.left.red = false;
+						sibling.red = true;
+						this.rotateRight(sibling);
+						sibling = parent.right;
 					}
-					sibling.rbRed = parent.rbRed;
-					parent.rbRed = sibling.rbRight.rbRed = false;
-					this.rbRotateLeft(parent);
+					sibling.red = parent.red;
+					parent.red = sibling.right.red = false;
+					this.rotateLeft(parent);
+					node = this.root;
+					break;
+				}
+			} else {
+				sibling = parent.left;
+				if (sibling.red) {
+					sibling.red = false;
+					parent.red = true;
+					this.rotateRight(parent);
+					sibling = parent.left;
+				}
+				if ((sibling.left && sibling.left.red) || (sibling.right && sibling.right.red)) {
+					if (!sibling.left || !sibling.left.red) {
+						sibling.right.red = false;
+						sibling.red = true;
+						this.rotateLeft(sibling);
+						sibling = parent.left;
+					}
+					sibling.red = parent.red;
+					parent.red = sibling.left.red = false;
+					this.rotateRight(parent);
 					node = this.root;
 					break;
 				}
 			}
-			else {
-				sibling = parent.rbLeft;
-				if (sibling.rbRed) {
-					sibling.rbRed = false;
-					parent.rbRed = true;
-					this.rbRotateRight(parent);
-					sibling = parent.rbLeft;
-				}
-				if ((sibling.rbLeft && sibling.rbLeft.rbRed) || (sibling.rbRight && sibling.rbRight.rbRed)) {
-					if (!sibling.rbLeft || !sibling.rbLeft.rbRed) {
-						sibling.rbRight.rbRed = false;
-						sibling.rbRed = true;
-						this.rbRotateLeft(sibling);
-						sibling = parent.rbLeft;
-					}
-					sibling.rbRed = parent.rbRed;
-					parent.rbRed = sibling.rbLeft.rbRed = false;
-					this.rbRotateRight(parent);
-					node = this.root;
-					break;
-				}
-			}
-			sibling.rbRed = true;
+			sibling.red = true;
 			node = parent;
-			parent = parent.rbParent;
-		} while (!node.rbRed);
-		if (node) { node.rbRed = false; }
-	};
+			parent = parent.parent;
+		} while (!node.red);
+		if (node) {
+			node.red = false;
+		}
+	}
 
-	rbRotateLeft(node) {
-		var p = node,
-			q = node.rbRight, // can't be null
-			parent = p.rbParent;
-		if (parent) {
-			if (parent.rbLeft === p) {
-				parent.rbLeft = q;
-			}
-			else {
-				parent.rbRight = q;
-			}
+	rotateLeft(node) {
+		if (!node.parent) {
+			this.root = node.right;
 		}
-		else {
-			this.root = q;
+		node.rotateLeft();
+	}
+	
+	rotateRight(node) {
+		if (!node.parent) {
+			this.root = node.left;
 		}
-		q.rbParent = parent;
-		p.rbParent = q;
-		p.rbRight = q.rbLeft;
-		if (p.rbRight) {
-			p.rbRight.rbParent = p;
-		}
-		q.rbLeft = p;
-	};
-
-	rbRotateRight(node) {
-		var p = node,
-			q = node.rbLeft, // can't be null
-			parent = p.rbParent;
-		if (parent) {
-			if (parent.rbLeft === p) {
-				parent.rbLeft = q;
-			}
-			else {
-				parent.rbRight = q;
-			}
-		}
-		else {
-			this.root = q;
-		}
-		q.rbParent = parent;
-		p.rbParent = q;
-		p.rbLeft = q.rbRight;
-		if (p.rbLeft) {
-			p.rbLeft.rbParent = p;
-		}
-		q.rbRight = p;
-	};
-
-	getFirst(node) {
-		while (node.rbLeft) {
-			node = node.rbLeft;
-		}
-		return node;
-	};
-
-	getLast(node) {
-		while (node.rbRight) {
-			node = node.rbRight;
-		}
-		return node;
-	};
+		node.rotateRight();
+		return;
+	}
 }
