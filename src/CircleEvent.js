@@ -1,6 +1,7 @@
 import Point from './Point.js';
 import RBNode from './RBNode.js';
 export default class CircleEvent extends RBNode {
+	static junkyard = [];
 	constructor(arc, x, ycenter, y) {
 		super();
 		this.arc = arc;

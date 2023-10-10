@@ -16,12 +16,7 @@ export default class Voronoi {
 		this.edges = null;
 		this.cells = null;
 		this.toRecycle = null;
-		this.beachSectionJunkyard = [];
-		this.circleEventJunkyard = [];
 		this.firstCircleEvent = null;
-		this.vertexJunkyard = [];
-		this.edgeJunkyard = [];
-		this.cellJunkyard = [];
 	}
 	reset() {
 		if (!this.beachline) {
@@ -31,7 +26,7 @@ export default class Voronoi {
 		if (this.beachline.root) {
 			var beachSection = this.beachline.root.getFirst();
 			while (beachSection) {
-				this.beachSectionJunkyard.push(beachSection); // mark for reuse
+				BeachSection.junkyard.push(beachSection); // mark for reuse
 				beachSection = beachSection.next;
 			}
 		}
@@ -56,50 +51,27 @@ export default class Voronoi {
 	lessThanOrEqualWithEpsilon = (a, b = 0) => a - b < Voronoi.ε;
 
 	createCell(site) {
-		var cell = this.cellJunkyard.pop();
-		if (cell) {
-			return cell.init(site);
-		}
-		return new Cell(site);
+		return Cell.create(site);
 	}
-	createHalfedge(edge, lSite, rSite) {
-		return new HalfEdge(edge, lSite, rSite);
+	createHalfEdge(edge, lSite, rSite) {
+		return HalfEdge.create(edge, lSite, rSite);
 	}
 	createVertex(x, y) {
-		var v = this.vertexJunkyard.pop();
-		if (!v) {
-			v = new Vertex(x, y);
-		} else {
-			v.moveTo(x, y);
-		}
+		var v = Vertex.create(x, y);
 		this.vertices.push(v);
 		return v;
 	}
 	createEdge(left, right, va, vb) {
 		left = left.site || left;
 		right = right.site || right;
-		var edge = this.edgeJunkyard.pop();
-		if (!edge) {
-			edge = new Edge(left, right);
-		} else {
-			edge.setSites(left, right);
-			edge.setVertices(va, vb);
-		}
-
+		var edge = Edge.create(left, right, va, vb);
 		this.edges.push(edge);
-		if (va) {
-			edge.setStartPoint(left, right, va);
-		}
-		if (vb) {
-			edge.setEndPoint(left, right, vb);
-		}
-
-		this.cells[left.voronoiId].halfedges.push(this.createHalfedge(edge, left, right));
-		this.cells[right.voronoiId].halfedges.push(this.createHalfedge(edge, right, left));
+		this.cells[left.voronoiId].addHalfEdge(edge, left, right);
+		this.cells[right.voronoiId].addHalfEdge(edge, right, left);
 		return edge;
 	}
 	createBorderEdge(lSite, va, vb) {
-		var edge = this.edgeJunkyard.pop();
+		var edge = Edge.junkyard.pop();
 		if (!edge) {
 			edge = new Edge(lSite, null);
 		} else {
@@ -120,11 +92,7 @@ export default class Voronoi {
 	// performance gain.
 
 	createBeachSection(site) {
-		var beachSection = this.beachSectionJunkyard.pop();
-		if (!beachSection) {
-			beachSection = new BeachSection();
-		}
-		beachSection.site = site;
+		var beachSection = BeachSection.create(site);
 		return beachSection;
 	}
 
@@ -212,7 +180,7 @@ export default class Voronoi {
 	detachBeachSection(beachSection) {
 		this.detachCircleEvent(beachSection); // detach potentially attached circle event
 		this.beachline.removeNode(beachSection); // remove from RB-tree
-		this.beachSectionJunkyard.push(beachSection); // mark for reuse
+		BeachSection.junkyard.push(beachSection); // mark for reuse
 	}
 
 	removeBeachSection(beachSection) {
@@ -504,7 +472,7 @@ export default class Voronoi {
 		// to waste CPU cycles by checking
 		
 		// recycle circle event object if possible
-		var circleEvent = this.circleEventJunkyard.pop();
+		var circleEvent = CircleEvent.junkyard.pop();
 		if (!circleEvent) {
 			circleEvent = new CircleEvent();
 		}
@@ -550,7 +518,7 @@ export default class Voronoi {
 				this.firstCircleEvent = circleEvent.next;
 			}
 			this.circleEvents.removeNode(circleEvent); // remove from RB-tree
-			this.circleEventJunkyard.push(circleEvent);
+			CircleEvent.junkyard.push(circleEvent);
 			arc.circleEvent = null;
 		}
 	}
@@ -829,7 +797,7 @@ export default class Voronoi {
 	/**
 	 * Close the cells.
 	 * The cells are bound by the supplied bounding box.
-	 * Each cell refers to its associated site, and a list of halfedges ordered counterclockwise.
+	 * Each cell refers to its associated site, and a list of halfEdges ordered counterclockwise.
 	 * 
 	 * @param {Rect} bbox 
 	 */
@@ -839,7 +807,7 @@ export default class Voronoi {
 		var iCell = cells.length;
 		var cell;
 		var iLeft;
-		var halfedges, nHalfedges;
+		var halfEdges, nHalfEdges;
 		var edge;
 		var va, vb, vz;
 		var lastBorderSegment;
@@ -847,33 +815,33 @@ export default class Voronoi {
 
 		while (iCell--) {
 			cell = cells[iCell];
-			// prune, order halfedges counterclockwise, then add missing ones
+			// prune, order halfEdges counterclockwise, then add missing ones
 			// required to close cells
-			if (!cell.prepareHalfedges()) {
+			if (!cell.prepareHalfEdges()) {
 				continue;
 			}
 			if (!cell.closeMe) {
 				continue;
 			}
 			// find first 'unclosed' point.
-			// an 'unclosed' point will be the end point of a halfedge which
-			// does not match the start point of the following halfedge
-			halfedges = cell.halfedges;
-			nHalfedges = halfedges.length;
+			// an 'unclosed' point will be the end point of a halfEdge which
+			// does not match the start point of the following halfEdge
+			halfEdges = cell.halfEdges;
+			nHalfEdges = halfEdges.length;
 			// special case: only one site, in which case, the viewport is the cell
 			// ...
 
 			// all other cases
 			iLeft = 0;
-			while (iLeft < nHalfedges) {
-				va = halfedges[iLeft].getEndpoint();
-				vz = halfedges[(iLeft + 1) % nHalfedges].getStartpoint();
+			while (iLeft < nHalfEdges) {
+				va = halfEdges[iLeft].getEndpoint();
+				vz = halfEdges[(iLeft + 1) % nHalfEdges].getStartpoint();
 				// if end point is not equal to start point, we need to add the missing
-				// halfedge(s) up to vz
+				// halfEdge(s) up to vz
 				if (abs_fn(va.x - vz.x) >= 1e-9 || abs_fn(va.y - vz.y) >= 1e-9) {
 
 					// rhill 2013-12-02:
-					// "Holes" in the halfedges are not necessarily always adjacent.
+					// "Holes" in the halfEdges are not necessarily always adjacent.
 					// https://github.com/gorhill/Javascript-Voronoi/issues/16
 
 					// find entry point:
@@ -885,8 +853,8 @@ export default class Voronoi {
 							vb = this.createVertex(left, lastBorderSegment ? vz.y : bottom);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 						// fall through
@@ -897,8 +865,8 @@ export default class Voronoi {
 							vb = this.createVertex(lastBorderSegment ? vz.x : right, bottom);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 						// fall through
@@ -909,8 +877,8 @@ export default class Voronoi {
 							vb = this.createVertex(right, lastBorderSegment ? vz.y : top);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 						// fall through
@@ -921,8 +889,8 @@ export default class Voronoi {
 							vb = this.createVertex(lastBorderSegment ? vz.x : left, top);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 							// fall through
@@ -932,8 +900,8 @@ export default class Voronoi {
 							vb = this.createVertex(left, lastBorderSegment ? vz.y : bottom);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 							// fall through
@@ -943,8 +911,8 @@ export default class Voronoi {
 							vb = this.createVertex(lastBorderSegment ? vz.x : right, bottom);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 							va = vb;
 							// fall through
@@ -954,8 +922,8 @@ export default class Voronoi {
 							vb = this.createVertex(right, lastBorderSegment ? vz.y : top);
 							edge = this.createBorderEdge(cell.site, va, vb);
 							iLeft++;
-							halfedges.splice(iLeft, 0, this.createHalfedge(edge, cell.site, null));
-							nHalfedges++;
+							halfEdges.splice(iLeft, 0, this.createHalfEdge(edge, cell.site, null));
+							nHalfEdges++;
 							if (lastBorderSegment) { break; }
 						// fall through
 
@@ -1017,7 +985,7 @@ else {
 
 	recycle(diagram) {
 		if (diagram) {
-			if (diagram instanceof this.Diagram) {
+			if (diagram instanceof Diagram) {
 				this.toRecycle = diagram;
 			}
 			else {
@@ -1044,9 +1012,9 @@ else {
 		// any diagram data available for recycling?
 		// I do that here so that this is included in execution time
 		if (this.toRecycle) {
-			this.vertexJunkyard = this.vertexJunkyard.concat(this.toRecycle.vertices);
-			this.edgeJunkyard = this.edgeJunkyard.concat(this.toRecycle.edges);
-			this.cellJunkyard = this.cellJunkyard.concat(this.toRecycle.cells);
+			Vertex.junkyard = Vertex.junkyard.concat(this.toRecycle.vertices);
+			Edge.junkyard = Edge.junkyard.concat(this.toRecycle.edges);
+			Cell.junkyard = Cell.junkyard.concat(this.toRecycle.cells);
 			this.toRecycle = null;
 		}
 

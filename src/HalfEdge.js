@@ -31,6 +31,9 @@ export default class HalfEdge extends Edge {
 	getEndpoint() {
 		return this.edge.lSite === this.site ? this.edge.vb : this.edge.va;
 	}
+	static create(edge, lSite, rSite) {
+		return new this(edge, lSite, rSite);
+	}
 
 }
 
