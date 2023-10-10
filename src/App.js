@@ -1,3 +1,5 @@
+import Rect from "./Rect.js";
+import Site from "./Site.js";
 import Voronoi from "./Voronoi.js";
 
 var VoronoiDemo = {
@@ -6,7 +8,7 @@ var VoronoiDemo = {
     diagram: null,
     margin: 0.15,
     canvas: null,
-    bbox: { xl: 0, xr: 800, yt: 0, yb: 600 },
+    bbox: new Rect(800, 600),
     benchmarkTimer: null,
     benchmarkTimes: new Array(50),
     benchmarkPointer: 0,
@@ -85,17 +87,17 @@ var VoronoiDemo = {
     randomSites: function (n, clear) {
         if (clear) { this.sites = []; }
         // create vertices
-        var xmargin = this.canvas.width * this.margin,
-            ymargin = this.canvas.height * this.margin,
-            xo = xmargin,
-            dx = this.canvas.width - xmargin * 2,
-            yo = ymargin,
-            dy = this.canvas.height - ymargin * 2;
+        var xmargin = this.canvas.width * this.margin;
+        var ymargin = this.canvas.height * this.margin;
+        var xo = xmargin;
+        var dx = this.canvas.width - xmargin * 2;
+        var yo = ymargin;
+        var dy = this.canvas.height - ymargin * 2;
         for (var i = 0; i < n; i++) {
-            this.sites.push({
-                x: xo + Math.random() * dx + Math.random() / dx,
-                y: yo + Math.random() * dy + Math.random() / dy
-            });
+            this.sites.push(new Site(
+                xo + Math.random() * dx + Math.random() / dx,
+                yo + Math.random() * dy + Math.random() / dy
+            ));
         }
         this.voronoi.recycle(this.diagram);
         this.diagram = this.voronoi.compute(this.sites, this.bbox);
@@ -129,9 +131,9 @@ var VoronoiDemo = {
         // edges
         ctx.beginPath();
         ctx.strokeStyle = '#000';
-        var edges = this.diagram.edges,
-            iEdge = edges.length,
-            edge, v;
+        var edges = this.diagram.edges;
+        var iEdge = edges.length;
+        var edge, v;
         while (iEdge--) {
             edge = edges[iEdge];
             v = edge.va;
@@ -143,8 +145,8 @@ var VoronoiDemo = {
         // edges
         ctx.beginPath();
         ctx.fillStyle = 'red';
-        var vertices = this.diagram.vertices,
-            iVertex = vertices.length;
+        var vertices = this.diagram.vertices;
+        var iVertex = vertices.length;
         while (iVertex--) {
             v = vertices[iVertex];
             ctx.rect(v.x - 1, v.y - 1, 3, 3);
@@ -153,8 +155,8 @@ var VoronoiDemo = {
         // sites
         ctx.beginPath();
         ctx.fillStyle = '#44f';
-        var sites = this.sites,
-            iSite = sites.length;
+        var sites = this.sites;
+        var iSite = sites.length;
         while (iSite--) {
             v = sites[iSite];
             ctx.rect(v.x - 2 / 3, v.y - 2 / 3, 2, 2);
