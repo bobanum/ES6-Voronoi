@@ -13,8 +13,8 @@ export default class Cell {
 		this.closeMe = false;
 		return this;
 	}
-	addHalfEdge(edge, left, right) {
-		this.halfEdges.push(new HalfEdge(edge, left, right));
+	addHalfEdge(edge, otherSite) {
+		this.halfEdges.push(new HalfEdge(edge, this.site, otherSite));
 	}
 
 	prepareHalfEdges() {

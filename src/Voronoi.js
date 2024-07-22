@@ -66,8 +66,6 @@ export default class Voronoi {
 		right = right.site || right;
 		var edge = Edge.create(left, right, va, vb);
 		this.edges.push(edge);
-		this.cells[left.voronoiId].addHalfEdge(edge, left, right);
-		this.cells[right.voronoiId].addHalfEdge(edge, right, left);
 		return edge;
 	}
 	createBorderEdge(lSite, va, vb) {
@@ -533,13 +531,11 @@ export default class Voronoi {
 	//   true: the dangling endpoint could be connected
 	connectEdge(edge, bbox) {
 		// skip if end point already connected
-		var vb = edge.vb;
-		if (!!vb) {
+		if (!!edge.vb) {
 			return true;
 		}
 		
 		// make local copy for performance purpose
-		var va = edge.va;
 		var { left, right, top, bottom } = bbox;
 		var lSite = edge.lSite;
 		var rSite = edge.rSite;
@@ -556,8 +552,8 @@ export default class Voronoi {
 		// if we reach here, this means cells which use this edge will need
 		// to be closed, whether because the edge was removed, or because it
 		// was connected to the bounding box.
-		this.cells[lSite.voronoiId].closeMe = true;
-		this.cells[rSite.voronoiId].closeMe = true;
+		lSite.cell.closeMe = true;
+		rSite.cell.closeMe = true;
 
 		// get the line equation of the bisector if line is not vertical
 		if (!edge.isBisectorVertical()) {
@@ -593,68 +589,65 @@ export default class Voronoi {
 			}
 			if (edge.isDownward()) {
 				// downward
-				if (!va || va.y < top) {
-					va = this.createVertex(f.x, top);
-				} else if (va.y >= bottom) {
+				if (!edge.va || edge.va.y < top) {
+					edge.va = this.createVertex(f.x, top);
+				} else if (edge.va.y >= bottom) {
 					return false;
 				}
-				vb = this.createVertex(f.x, bottom);
+				edge.vb = this.createVertex(f.x, bottom);
 			} else {
 			// upward
-				if (!va || va.y > bottom) {
-					va = this.createVertex(f.x, bottom);
-				} else if (va.y < top) {
+				if (!edge.va || edge.va.y > bottom) {
+					edge.va = this.createVertex(f.x, bottom);
+				} else if (edge.va.y < top) {
 					return false;
 				}
-				vb = this.createVertex(f.x, top);
+				edge.vb = this.createVertex(f.x, top);
 			}
-		}
-		// closer to vertical than horizontal, connect start point to the
-		// top or bottom side of the bounding box
-		else if (fm < -1 || fm > 1) {
+		} else if (fm < -1 || fm > 1) {
+			// closer to vertical than horizontal, connect start point to the
+			// top or bottom side of the bounding box
 			// downward
-			if (lx > rx) {
-				if (!va || va.y < top) {
-					va = this.createVertex((top - fb) / fm, top);
-				} else if (va.y >= bottom) {
+			if (edge.isDownward()) {
+				if (!edge.va || edge.va.y < top) {
+					edge.va = this.createVertex((top - fb) / fm, top);
+				} else if (edge.va.y >= bottom) {
 					return false;
 				}
-				vb = this.createVertex((bottom - fb) / fm, bottom);
-			}
+				edge.vb = this.createVertex((bottom - fb) / fm, bottom);
+			} else {
 			// upward
-			else {
-				if (!va || va.y > bottom) {
-					va = this.createVertex((bottom - fb) / fm, bottom);
-				} else if (va.y < top) {
+				if (!edge.va || edge.va.y > bottom) {
+					edge.va = this.createVertex((bottom - fb) / fm, bottom);
+				} else if (edge.va.y < top) {
 					return false;
 				}
-				vb = this.createVertex((top - fb) / fm, top);
+				edge.vb = this.createVertex((top - fb) / fm, top);
 			}
-		}
-		// closer to horizontal than vertical, connect start point to the
-		// left or right side of the bounding box
-		else {
+		} else {
+			// closer to horizontal than vertical, connect start point to the
+			// left or right side of the bounding box
 			// rightward
 			if (ly < ry) {
-				if (!va || va.x < left) {
-					va = this.createVertex(left, fm * left + fb);
-				} else if (va.x >= right) {
+				if (!edge.va || edge.va.x < left) {
+					edge.va = this.createVertex(left, fm * left + fb);
+				} else if (edge.va.x >= right) {
 					return false;
 				}
-				vb = this.createVertex(right, fm * right + fb);
+				edge.vb = this.createVertex(right, fm * right + fb);
 			}
 			// leftward
 			else {
-				if (!va || va.x > right) {
-					va = this.createVertex(right, fm * right + fb);
-				} else if (va.x < left) {
+				if (!edge.va || edge.va.x > right) {
+					edge.va = this.createVertex(right, fm * right + fb);
+				} else if (edge.va.x < left) {
 					return false;
 				}
-				vb = this.createVertex(left, fm * left + fb);
+				edge.vb = this.createVertex(left, fm * left + fb);
 			}
 		}
-		edge.va = va;
-		edge.vb = vb;
+		// edge.va = edge.va;
+		// edge.vb = edge.vb;
 
 		return true;
 	}
@@ -763,8 +756,7 @@ export default class Voronoi {
 		// va and/or vb were clipped, thus we will need to close
 		// cells which use this edge.
 		if (t0 > 0 || t1 < 1) {
-			this.cells[edge.lSite.voronoiId].closeMe = true;
-			this.cells[edge.rSite.voronoiId].closeMe = true;
+			edge.closeCells();
 		}
 
 		return true;
@@ -804,7 +796,8 @@ export default class Voronoi {
 	closeCells(bbox) {
 		var { left, right, top, bottom } = bbox;
 		var cells = this.cells;
-		var iCell = cells.length;
+		var sites = this.sites;
+		var iSite = cells.length;
 		var cell;
 		var iLeft;
 		var halfEdges, nHalfEdges;
@@ -813,8 +806,8 @@ export default class Voronoi {
 		var lastBorderSegment;
 		var abs_fn = Math.abs;
 
-		while (iCell--) {
-			cell = cells[iCell];
+		while (iSite--) {
+			cell = sites[iSite].cell;
 			// prune, order halfEdges counterclockwise, then add missing ones
 			// required to close cells
 			if (!cell.prepareHalfEdges()) {
@@ -1003,6 +996,7 @@ else {
 	//   *references* to sites are copied locally.
 
 	compute(sites, bbox) {
+		this.sites = sites;
 		// to measure execution time
 		var startTime = new Date();
 
@@ -1033,7 +1027,6 @@ else {
 		var siteid = 0;
 		var xsitex; // to avoid duplicate sites
 		var xsitey;
-		var cells = this.cells;
 		var circle;
 
 		// main loop
@@ -1048,7 +1041,6 @@ else {
 				// only if site is not a duplicate
 				if (site.x !== xsitex || site.y !== xsitey) {
 					// first create cell for new site
-					cells[siteid] = this.createCell(site);
 					site.voronoiId = siteid++;
 					// then create a beachSection for that site
 					this.addBeachSection(site);
@@ -1085,7 +1077,7 @@ else {
 
 		// prepare return values
 		var diagram = new Diagram();
-		diagram.cells = this.cells;
+		diagram.cells = this.sites.map(site => site.cell);
 		diagram.edges = this.edges;
 		diagram.vertices = this.vertices;
 		diagram.execTime = stopTime.getTime() - startTime.getTime();
